@@ -101,7 +101,7 @@ header{background:#fff;border-bottom:1px solid var(--line);display:flex;align-it
 .hidden{display:none!important}
 
 
-/* V4.1 Client Demo polish */
+/* V4.1.1 Client Demo polish */
 .text-kpi strong{font-size:15px;line-height:1.15;margin-top:7px;letter-spacing:-.02em;min-height:34px;display:flex;align-items:center}
 .modal{background:rgba(9,27,46,.55);backdrop-filter:blur(3px)}
 .modal-card{width:min(1080px,96vw);border:1px solid rgba(255,255,255,.65);box-shadow:0 32px 90px rgba(7,27,48,.32)}
@@ -159,6 +159,7 @@ header{background:#fff;border-bottom:1px solid var(--line);display:flex;align-it
     <div class="eyebrow">Producer Overview</div>
     <h2 id="sideTitle">Seluruh Aceh</h2>
     <p class="sub" id="sideSub">Sebaran producer kopi yang teridentifikasi pada 23 Kabupaten/Kota di Aceh.</p>
+    <div class="active-filter" id="activeFilter"><span>Wilayah</span><strong>Semua Aceh</strong></div>
 
     <div class="hero-kpi">
       <span>Total Producer Tampil</span>
@@ -174,7 +175,7 @@ header{background:#fff;border-bottom:1px solid var(--line);display:flex;align-it
     </div>
 
     <div class="panel">
-      <div class="panel-h"><span>Ranking Kabupaten/Kota</span><small>berdasarkan filter aktif</small></div>
+      <div class="panel-h"><span>Top Wilayah Producer</span><small>klik wilayah untuk fokus</small></div>
       <div class="rank-list" id="rankList"></div>
     </div>
   </aside>
@@ -183,7 +184,7 @@ header{background:#fff;border-bottom:1px solid var(--line);display:flex;align-it
     <div class="toolbar">
       <input class="control search" id="search" placeholder="Cari nama atau alamat..." oninput="refresh()">
       <select class="control select" id="regionFilter" onchange="regionChanged()">
-        <option value="ALL">Semua Kabupaten/Kota</option>
+        <option value="ALL">Semua Wilayah Aceh</option>
       </select>
       <select class="control select" id="typeFilter" onchange="refresh()">
         <option value="ALL">Semua Jenis Producer</option>
@@ -407,20 +408,50 @@ function renderKpi(rows){
   document.getElementById('sideTitle').textContent=region==='ALL'?'Seluruh Aceh':displayRegion(region);
   document.getElementById('sideSub').textContent=region==='ALL'
     ?'Sebaran producer kopi yang teridentifikasi pada 23 Kabupaten/Kota di Aceh.'
-    :'Producer kopi pada '+displayRegion(region)+' sesuai filter aktif.';
+    :'Menampilkan producer kopi pada '+displayRegion(region)+'.';
+  var af=document.getElementById('activeFilter');
+  if(af){
+    af.querySelector('strong').textContent=region==='ALL'?'Semua Aceh':displayRegion(region);
+  }
 }
 
-function renderRanking(rows){
-  var counts=countByRegion(rows);
+function rankingRows(){
+  var type=document.getElementById('typeFilter').value;
+  var q=document.getElementById('search').value.toLowerCase().trim();
+
+  return app.rows.filter(function(r){
+    if(type!=='ALL'&&!String(r.Producer_Type||'').includes(type))return false;
+    if(q){
+      var hay=(String(r.Name||'')+' '+String(r.Address||'')+' '+String(r.Producer_Type||'')).toLowerCase();
+      if(hay.indexOf(q)===-1)return false;
+    }
+    return true;
+  });
+}
+
+function renderRanking(){
+  var counts=countByRegion(rankingRows());
   var all=ACEH_KABKOTA.features.map(function(f){
     return {name:f.properties.WADMKK,n:counts[f.properties.WADMKK]||0};
-  }).sort(function(a,b){return b.n-a.n || a.name.localeCompare(b.name)});
+  }).filter(function(x){
+    return x.n>0;
+  }).sort(function(a,b){
+    return b.n-a.n || a.name.localeCompare(b.name);
+  });
 
   var box=document.getElementById('rankList');
+  if(!all.length){
+    box.innerHTML='<div style="padding:18px 14px;color:#7b8b9b;font-size:10px;line-height:1.5">Tidak ada producer yang cocok dengan pencarian / jenis producer saat ini.</div>';
+    return;
+  }
+
   box.innerHTML=all.map(function(x,i){
-    return '<div class="rank-row" onclick="selectRegion(\''+esc(x.name).replace(/'/g,"\\'")+'\')">'+
+    var active=x.name===app.selectedRegion?' active':'';
+    return '<div class="rank-row'+active+'" onclick="selectRegion(\''+esc(x.name).replace(/'/g,"\'")+'\')">'+
       '<div class="rank-num">'+(i+1)+'</div>'+
-      '<div><div class="rank-name">'+esc(displayRegion(x.name))+'</div><div class="rank-sub">Kabupaten/Kota</div></div>'+
+      '<div><div class="rank-name">'+esc(displayRegion(x.name))+'</div><div class="rank-sub">'+
+        (x.name===app.selectedRegion?'Wilayah terpilih':'Klik untuk fokus peta')+
+      '</div></div>'+
       '<div class="rank-val">'+fmt(x.n)+'</div>'+
     '</div>';
   }).join('');
@@ -443,12 +474,12 @@ function refresh(zoomRegion){
   renderBoundary(rows);
   renderPoints(rows);
   renderKpi(rows);
-  renderRanking(rows);
+  renderRanking();
 
   var region=app.selectedRegion;
   document.getElementById('mapTitle').textContent=
     region==='ALL'?'Peta Producer Kopi · Aceh':'Producer Kopi · '+displayRegion(region);
-  document.getElementById('mapSub').textContent=fmt(rows.length)+' producer pada filter aktif';
+  document.getElementById('mapSub').textContent=(region==='ALL'?fmt(rows.length)+' producer di seluruh Aceh':fmt(rows.length)+' producer di '+displayRegion(region));
 
   if(zoomRegion){
     if(region==='ALL'&&app.acehBounds){
